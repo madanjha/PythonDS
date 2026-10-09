@@ -1,0 +1,76 @@
+The UI is built and works in my test environment, but I ran out of tool calls before packaging it. The files are in my working folder, so you can’t download them yet. If you send another message, I’ll fix the open items below, add a requirements.txt and README, and hand you the zip.
+
+What’s in the notebook
+
+Sentiment: an Amazon Fine Food Reviews classifier that compares RNN and LSTM, runs a random search, and saves best_amazon_sentiment.h5 and .pkl. Its test accuracy is 91.67%.
+Translator: a Seq2Seq English-to-Hindi LSTM trained on 9 sentence pairs.
+TinyTransformer: defined but never trained, so I left it out of the UI and noted that on the Experiments page.
+
+What I built
+
+Stack: AngularJS 1.8.3 and its router are bundled locally, so it runs without internet. A small Flask backend wraps the notebook’s own model code.
+Review sentiment: you type a review and get the label, the probability, and each preprocessing step (cleaned text, word ids, padding).
+English to Hindi: shows the encoder input, each decoder step, a check of all 9 training pairs, and the training-loss curve.
+Experiments: rating distribution, RNN vs LSTM curves, and a sortable table of the 8 search trials, all with numbers copied from your notebook’s saved outputs.
+
+What I verified
+
+Translator: the Seq2Seq trains in about 5 seconds. All 9 pairs come out exactly right. Its first-epoch loss (3.2962), token ids and “tired is hungry” output match your notebook.
+UI: headless Chromium showed no console errors, and all three tabs, the charts, sorting and the mobile layout work.
+Sentiment loading: your model files weren’t in the upload, so I couldn’t test your actual LSTM. I checked the load path with a throwaway model I trained on about a dozen made-up sentences. Without model files the app falls back to a small word-list scorer, and the UI says so on screen.
+
+Still open
+
+Mobile overflow: the Experiments page scrolls sideways on a 390px screen. I haven’t found the cause yet.
+Unchecked fixes: I fixed a missing legend swatch and some uneven spacing but didn’t re-screenshot them.
+Model compatibility: I tested with TensorFlow 2.21 and Keras 3.15. If your Colab-saved .h5 fails to load in your environment, the status bar shows the error and the app stays on the word-list scorer.
+One deviation from the notebook: the translator maps a capitalized word like “I” to “i” when the exact form isn’t in its vocabulary. The notebook would treat “I” as unknown.
+
+To run it once you have the files, put your .h5 and .pkl in backend/models/, then:
+
+pip install flask tensorflow numpy
+cd backend && python app.py
+
+Then open http://127.0.0.1:5000.
+
+Continue
+
+The server stopped between turns, so I’ll restart it and look for the overflow.
+
+Claude’s response was interrupted.
+
+write the code which can check the files in directory and sub-directory and compare the change mentioned in release bulletin pdf document and cross verify the files change if the any discrepancy found highlight the details like information is missing in release bulletin doc or in files
+Refine the above requirement and provide the prompts for the Agent
+
+Good — pypdf and pdfplumber are both available. Here’s the refined requirement, the agent prompts, and the verification tool.
+
+Refined requirement
+
+Goal: Detect mismatches between a release bulletin (PDF) and the actual files that changed in a release, in both directions.
+
+Inputs
+
+A file change set — one of:
+two directory snapshots (--before-dir, --after-dir), or
+a git repo + two refs/commits (--repo, --from-ref, --to-ref)
+A release bulletin PDF (--bulletin) that lists changed files/features/fixes in prose, bullets, or a table.
+
+Processing
+
+Walk both trees (or run git diff) and classify every path as Added / Removed / Modified / Unchanged, using a content hash (not mtime, which is unreliable).
+Extract text from the PDF and pull out every file path, module name, or feature/fix line it mentions.
+Match each real file change to a bulletin mention (by path, then by filename/module fuzzy match since bulletins rarely use full paths).
+Classify every item into one of four buckets:
+Documented & matches — mentioned in bulletin, file actually changed.
+Undocumented change — file changed, nothing in the bulletin mentions it.
+Phantom entry — bulletin mentions a file/feature, but no matching file changed.
+Ambiguous — bulletin mentions something but it maps to more than one changed file, or the match confidence is low.
+
+Output: a report (console + JSON/Markdown) listing each bucket with file path, bulletin line (if any), and a one-line reason — so a reviewer can see exactly what’s missing on which side.
+
+Explicitly out of scope for the deterministic script: judging whether a change matches the bulletin’s described intent (e.g. “fixed login timeout” vs. what the diff actually does) — that needs semantic reading of the diff, which is the Agent’s job, not the script’s.
+
+Division of labor
+Layer	Does	Why
+Script (deterministic)	hashing, diffing, PDF text extraction, exact/fuzzy filename matching	Needs to be reliable and repeatable — no hallucinated matches
+Agent (LLM)	reads the script’s raw output + the bulletin + the actual diffs, writes the final discrepancy narrative, catches cases where a bulletin line describes a change in prose that doesn’t name any file	Needs judgment and language understanding the script can’t d
